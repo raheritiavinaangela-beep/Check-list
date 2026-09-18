@@ -1,0 +1,11 @@
+{
+  "name": "Check Véhicule",
+  "description": "Application numérique de contrôle d’hygiène des véhicules et bidons livreurs de lait avec gestion des critères, photos et export Excel.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
+
