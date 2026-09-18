@@ -745,16 +745,6 @@ export const NewInspectionForm: React.FC<NewInspectionFormProps> = ({
               ))}
             </div>
           </div>
-
-          <button
-            id="btn_add_criterion_section_a_bottom"
-            type="button"
-            onClick={() => handleOpenAddCriterion('vehicule_bidons')}
-            className="w-full py-2.5 px-4 rounded-xl border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/40 hover:bg-blue-50 text-blue-800 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer group"
-          >
-            <PlusCircle className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
-            <span>Insérer un critère supplémentaire dans la Section A (Camion et bidons)</span>
-          </button>
         </div>
 
         {/* SECTION 2 : Personnel faisant la manipulation */}
@@ -818,16 +808,6 @@ export const NewInspectionForm: React.FC<NewInspectionFormProps> = ({
               ))}
             </div>
           </div>
-
-          <button
-            id="btn_add_criterion_section_b_bottom"
-            type="button"
-            onClick={() => handleOpenAddCriterion('personnel')}
-            className="w-full py-2.5 px-4 rounded-xl border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/40 hover:bg-blue-50 text-blue-800 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer group"
-          >
-            <PlusCircle className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
-            <span>Insérer un critère supplémentaire dans la Section B (Personnel)</span>
-          </button>
         </div>
 
         {/* Champ Autres observations */}

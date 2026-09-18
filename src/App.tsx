@@ -5,8 +5,16 @@ import { Header } from './components/Header';
 import { NewInspectionForm } from './components/NewInspectionForm';
 import { HistoryView } from './components/HistoryView';
 import { AnalyticsView } from './components/AnalyticsView';
+import { PasswordGate } from './components/PasswordGate';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('check_vehicule_auth') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [activeTab, setActiveTab] = useState<'new' | 'history' | 'analytics'>('new');
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [historyFilter, setHistoryFilter] = useState<{
@@ -22,8 +30,23 @@ export default function App() {
   };
 
   useEffect(() => {
-    reloadInspections();
-  }, []);
+    if (isAuthenticated) {
+      reloadInspections();
+    }
+  }, [isAuthenticated]);
+
+  const handleUnlock = () => {
+    setIsAuthenticated(true);
+  };
+
+  const handleLock = () => {
+    try {
+      sessionStorage.removeItem('check_vehicule_auth');
+    } catch {
+      // ignore
+    }
+    setIsAuthenticated(false);
+  };
 
   const handleInspectionCreated = () => {
     reloadInspections();
@@ -52,11 +75,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans antialiased">
+      {/* Fenêtre de verrouillage par mot de passe si non authentifié */}
+      {!isAuthenticated && (
+        <PasswordGate onUnlock={handleUnlock} />
+      )}
+
       {/* En-tête avec navigation par onglets */}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         totalInspectionsCount={inspections.length}
+        onLock={handleLock}
       />
 
       {/* Contenu principal selon l'onglet actif */}

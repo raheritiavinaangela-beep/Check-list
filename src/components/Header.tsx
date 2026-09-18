@@ -1,16 +1,18 @@
 import React from 'react';
-import { ClipboardCheck, History, BarChart3, ShieldCheck, Truck } from 'lucide-react';
+import { ClipboardCheck, History, BarChart3, ShieldCheck, Truck, Lock } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'new' | 'history' | 'analytics';
   setActiveTab: (tab: 'new' | 'history' | 'analytics') => void;
   totalInspectionsCount: number;
+  onLock?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
   totalInspectionsCount,
+  onLock,
 }) => {
   return (
     <header className="bg-blue-950 text-white border-b border-blue-900 sticky top-0 z-30 shadow-md">
@@ -83,6 +85,19 @@ export const Header: React.FC<HeaderProps> = ({
               <BarChart3 className="w-4 h-4" />
               <span>Statistiques & Risques</span>
             </button>
+
+            {onLock && (
+              <button
+                id="btn_lock_session"
+                type="button"
+                onClick={onLock}
+                title="Verrouiller l'accès"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium text-slate-300 hover:text-white hover:bg-red-950/50 border border-transparent hover:border-red-800/60 transition-all cursor-pointer whitespace-nowrap ml-1"
+              >
+                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                <span className="hidden sm:inline">Verrouiller</span>
+              </button>
+            )}
           </nav>
         </div>
       </div>
