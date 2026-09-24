@@ -21,6 +21,8 @@ export default function App() {
     statusFilter?: 'ALL' | 'CONFORME' | 'NON CONFORME';
     criterionCode?: string | null;
     criterionLabel?: string | null;
+    week?: string | null;
+    supplier?: string | null;
     timestamp?: number;
   }>({});
 
@@ -53,11 +55,13 @@ export default function App() {
     // Ne pas changer brutalement d'onglet pour laisser l'utilisateur voir la bannière de succès
   };
 
-  const handleNavigateToNonCompliant = () => {
+  const handleNavigateToNonCompliant = (week?: string) => {
     setHistoryFilter({
       statusFilter: 'NON CONFORME',
       criterionCode: null,
       criterionLabel: null,
+      week: week || null,
+      supplier: null,
       timestamp: Date.now(),
     });
     setActiveTab('history');
@@ -68,6 +72,22 @@ export default function App() {
       statusFilter: 'NON CONFORME',
       criterionCode: code,
       criterionLabel: label,
+      week: null,
+      supplier: null,
+      timestamp: Date.now(),
+    });
+    setActiveTab('history');
+  };
+
+  const handleNavigateToHistory = (filter: {
+    statusFilter?: 'ALL' | 'CONFORME' | 'NON CONFORME';
+    criterionCode?: string | null;
+    criterionLabel?: string | null;
+    week?: string | null;
+    supplier?: string | null;
+  }) => {
+    setHistoryFilter({
+      ...filter,
       timestamp: Date.now(),
     });
     setActiveTab('history');
@@ -102,9 +122,11 @@ export default function App() {
             inspections={inspections}
             onRefresh={reloadInspections}
             onNewInspection={() => setActiveTab('new')}
+            initialFilter={historyFilter}
             initialStatusFilter={historyFilter.statusFilter}
             initialCriterionCode={historyFilter.criterionCode}
             initialCriterionLabel={historyFilter.criterionLabel}
+            initialWeek={historyFilter.week}
             onClearInitialFilter={() => setHistoryFilter({})}
           />
         )}
@@ -114,6 +136,7 @@ export default function App() {
             inspections={inspections}
             onNavigateToNonCompliant={handleNavigateToNonCompliant}
             onNavigateToCriterion={handleNavigateToCriterion}
+            onNavigateToHistory={handleNavigateToHistory}
           />
         )}
       </main>

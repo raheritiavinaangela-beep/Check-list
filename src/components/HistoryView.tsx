@@ -27,11 +27,14 @@ interface HistoryViewProps {
     statusFilter?: 'ALL' | 'CONFORME' | 'NON CONFORME';
     criterionCode?: string | null;
     criterionLabel?: string | null;
+    week?: string | null;
+    supplier?: string | null;
     timestamp?: number;
   };
   initialStatusFilter?: 'ALL' | 'CONFORME' | 'NON CONFORME';
   initialCriterionCode?: string | null;
   initialCriterionLabel?: string | null;
+  initialWeek?: string | null;
   onClearInitialFilter?: () => void;
 }
 
@@ -43,6 +46,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   initialStatusFilter,
   initialCriterionCode,
   initialCriterionLabel,
+  initialWeek,
   onClearInitialFilter,
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -57,7 +61,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     const label = initialFilter?.criterionLabel ?? initialCriterionLabel ?? undefined;
     return code ? { code, label } : null;
   });
-  const [selectedSupplier, setSelectedSupplier] = useState<string>('ALL');
+  const [selectedSupplier, setSelectedSupplier] = useState<string>(
+    initialFilter?.supplier || 'ALL'
+  );
+  const [selectedWeek, setSelectedWeek] = useState<string>(
+    initialFilter?.week || initialWeek || 'ALL'
+  );
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [selectedInspection, setSelectedInspection] = useState<Inspection | null>(null);
@@ -84,6 +93,20 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       setCriterionFilter(null);
     }
   }, [initialFilter?.criterionCode, initialFilter?.criterionLabel, initialFilter?.timestamp, initialCriterionCode, initialCriterionLabel]);
+
+  React.useEffect(() => {
+    const w = initialFilter?.week ?? initialWeek;
+    if (w) {
+      setSelectedWeek(w);
+    }
+  }, [initialFilter?.week, initialFilter?.timestamp, initialWeek]);
+
+  React.useEffect(() => {
+    const sup = initialFilter?.supplier;
+    if (sup) {
+      setSelectedSupplier(sup);
+    }
+  }, [initialFilter?.supplier, initialFilter?.timestamp]);
 
   // Liste unique des fournisseurs pour le filtre
   const uniqueSuppliers = useMemo(() => {
@@ -147,6 +170,15 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         return false;
       }
 
+      // Filtre Semaine
+      if (selectedWeek !== 'ALL') {
+        const itemWeek = (item.week || '').toLowerCase().trim();
+        const targetWeek = selectedWeek.toLowerCase().trim();
+        if (itemWeek !== targetWeek && !itemWeek.includes(targetWeek)) {
+          return false;
+        }
+      }
+
       // Filtre Dates
       if (startDate && item.date < startDate) {
         return false;
@@ -157,7 +189,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
       return true;
     });
-  }, [inspections, searchTerm, statusFilter, criterionFilter, selectedSupplier, startDate, endDate]);
+  }, [inspections, searchTerm, statusFilter, criterionFilter, selectedSupplier, selectedWeek, startDate, endDate]);
 
   const handleConfirmDelete = () => {
     if (!inspectionToDelete) return;
@@ -174,6 +206,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     setStatusFilter('ALL');
     setCriterionFilter(null);
     setSelectedSupplier('ALL');
+    setSelectedWeek('ALL');
     setStartDate('');
     setEndDate('');
     onClearInitialFilter?.();
@@ -184,6 +217,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     statusFilter !== 'ALL' ||
     criterionFilter !== null ||
     selectedSupplier !== 'ALL' ||
+    selectedWeek !== 'ALL' ||
     startDate !== '' ||
     endDate !== '';
 
@@ -332,9 +366,38 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   </button>
                 </span>
               )}
+              {selectedWeek !== 'ALL' && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-bold text-[11px] bg-blue-600 text-white shadow-2xs">
+                  <Calendar className="w-3 h-3 text-blue-200" />
+                  <span>Semaine : {selectedWeek}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedWeek('ALL');
+                      onClearInitialFilter?.();
+                    }}
+                    className="ml-1 text-blue-200 hover:text-white font-black cursor-pointer"
+                    title="Retirer le filtre de semaine"
+                  >
+                    ✕
+                  </button>
+                </span>
+              )}
               {selectedSupplier !== 'ALL' && (
-                <span className="bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-md text-[11px] font-medium">
-                  Fournisseur : {selectedSupplier}
+                <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-800 border border-slate-200 px-2 py-0.5 rounded-md text-[11px] font-medium">
+                  <Truck className="w-3 h-3 text-slate-500" />
+                  <span>Fournisseur : {selectedSupplier}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSupplier('ALL');
+                      onClearInitialFilter?.();
+                    }}
+                    className="ml-1 text-slate-400 hover:text-slate-700 font-black cursor-pointer"
+                    title="Retirer le filtre fournisseur"
+                  >
+                    ✕
+                  </button>
                 </span>
               )}
             </div>

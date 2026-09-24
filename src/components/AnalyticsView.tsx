@@ -19,6 +19,8 @@ import {
   Sparkles,
   Info,
   XCircle,
+  Table,
+  LayoutGrid,
 } from 'lucide-react';
 
 interface AnalyticsViewProps {
@@ -94,6 +96,37 @@ function calculateWeekInfo(dateStr: string) {
   }
 }
 
+const MONTH_NAMES_FR = [
+  'Janvier',
+  'Février',
+  'Mars',
+  'Avril',
+  'Mai',
+  'Juin',
+  'Juillet',
+  'Août',
+  'Septembre',
+  'Octobre',
+  'Novembre',
+  'Décembre',
+];
+
+function getMonthInfo(dateStr: string) {
+  try {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d.getTime())) return null;
+    const year = d.getFullYear();
+    const monthIndex = d.getMonth();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const monthKey = `${year}-${pad(monthIndex + 1)}`;
+    const monthLabel = `${MONTH_NAMES_FR[monthIndex]} ${year}`;
+    const timestamp = new Date(year, monthIndex, 1).getTime();
+    return { monthKey, monthLabel, year, monthIndex, timestamp };
+  } catch {
+    return null;
+  }
+}
+
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   inspections,
   onNavigateToNonCompliant,
@@ -102,6 +135,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 }) => {
   const [chartMode, setChartMode] = useState<'rate' | 'count'>('rate');
   const [selectedWeekKey, setSelectedWeekKey] = useState<string | null>(null);
+  const [supplierMonthKey, setSupplierMonthKey] = useState<string>('auto');
+  const [supplierViewMode, setSupplierViewMode] = useState<'cards' | 'table'>('cards');
 
   const handleGoNonCompliant = () => {
     if (onNavigateToHistory) {
@@ -159,6 +194,37 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
     const weeklyMap: Record<string, WeekStatItem> = {};
 
+    // 4. Stats Fournisseurs groupées par Mois
+    const monthlyGroupsMap: Record<
+      string,
+      {
+        monthKey: string;
+        monthLabel: string;
+        timestamp: number;
+        totalInspections: number;
+        compliantCount: number;
+        nonCompliantCount: number;
+        totalAnomalies: number;
+        suppliersMap: Record<
+          string,
+          {
+            name: string;
+            totalInspections: number;
+            compliant: number;
+            nonCompliant: number;
+            totalAnomalies: number;
+            inspectionsList: {
+              reference: string;
+              date: string;
+              week: string;
+              globalStatus: 'CONFORME' | 'NON CONFORME' | 'EN COURS';
+              anomalies: number;
+            }[];
+          }
+        >;
+      }
+    > = {};
+
     inspections.forEach((insp) => {
       // 1. Groupement hebdomadaire
       const weekInfo = calculateWeekInfo(insp.date) || {
@@ -212,7 +278,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         reference: insp.reference,
       });
 
-      // 2. Stats Fournisseur
+      // 2. Stats Fournisseur Global
       if (!supplierMap[insp.supplier]) {
         supplierMap[insp.supplier] = {
           name: insp.supplier,
@@ -228,7 +294,58 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         supplierMap[insp.supplier].nonCompliant++;
       }
 
-      // 3. Stats Critères
+      // 3. Stats Fournisseurs par Mois
+      const mInfo = getMonthInfo(insp.date);
+      if (mInfo) {
+        if (!monthlyGroupsMap[mInfo.monthKey]) {
+          monthlyGroupsMap[mInfo.monthKey] = {
+            monthKey: mInfo.monthKey,
+            monthLabel: mInfo.monthLabel,
+            timestamp: mInfo.timestamp,
+            totalInspections: 0,
+            compliantCount: 0,
+            nonCompliantCount: 0,
+            totalAnomalies: 0,
+            suppliersMap: {},
+          };
+        }
+        const mGroup = monthlyGroupsMap[mInfo.monthKey];
+        mGroup.totalInspections++;
+        if (insp.globalStatus === 'CONFORME') {
+          mGroup.compliantCount++;
+        } else {
+          mGroup.nonCompliantCount++;
+        }
+        mGroup.totalAnomalies += inspAnomalies;
+
+        if (!mGroup.suppliersMap[insp.supplier]) {
+          mGroup.suppliersMap[insp.supplier] = {
+            name: insp.supplier,
+            totalInspections: 0,
+            compliant: 0,
+            nonCompliant: 0,
+            totalAnomalies: 0,
+            inspectionsList: [],
+          };
+        }
+        const supM = mGroup.suppliersMap[insp.supplier];
+        supM.totalInspections++;
+        if (insp.globalStatus === 'CONFORME') {
+          supM.compliant++;
+        } else {
+          supM.nonCompliant++;
+        }
+        supM.totalAnomalies += inspAnomalies;
+        supM.inspectionsList.push({
+          reference: insp.reference,
+          date: insp.date,
+          week: insp.week || weekInfo.weekCode,
+          globalStatus: insp.globalStatus,
+          anomalies: inspAnomalies,
+        });
+      }
+
+      // 4. Stats Critères
       insp.criteriaResults?.forEach((c) => {
         if (!criteriaMap[c.criterionId]) {
           criteriaMap[c.criterionId] = {
@@ -266,6 +383,27 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     // Tri chronologique des semaines
     weeklyStats.sort((a, b) => a.mondayTimestamp - b.mondayTimestamp);
 
+    // Finaliser les groupes mensuels de fournisseurs
+    const monthlySupplierGroups = Object.values(monthlyGroupsMap)
+      .map((g) => {
+        const suppliers = Object.values(g.suppliersMap)
+          .map((s) => ({
+            ...s,
+            complianceRate:
+              s.totalInspections > 0 ? Math.round((s.compliant / s.totalInspections) * 100) : 0,
+          }))
+          .sort((a, b) => b.nonCompliant - a.nonCompliant || a.name.localeCompare(b.name));
+
+        const compRate =
+          g.totalInspections > 0 ? Math.round((g.compliantCount / g.totalInspections) * 100) : 0;
+        return {
+          ...g,
+          complianceRate: compRate,
+          suppliers,
+        };
+      })
+      .sort((a, b) => b.timestamp - a.timestamp);
+
     const criteriaStats = Object.values(criteriaMap).sort((a, b) => b.count - a.count);
     const supplierStats = Object.values(supplierMap).sort(
       (a, b) => b.nonCompliant - a.nonCompliant
@@ -280,6 +418,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       totalAnomalies,
       criteriaStats,
       supplierStats,
+      monthlySupplierGroups,
       weeklyStats,
       sectionStats,
     };
@@ -301,6 +440,22 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     );
     return Math.max(maxVal + 1, 4);
   }, [stats.weeklyStats]);
+
+  // Mois sélectionné pour le suivi qualité par fournisseur
+  const isAllMonths = supplierMonthKey === 'all';
+  const activeMonth = useMemo(() => {
+    if (stats.monthlySupplierGroups.length === 0) return null;
+    if (supplierMonthKey === 'auto') {
+      return stats.monthlySupplierGroups[0]; // Mois le plus récent
+    }
+    if (supplierMonthKey === 'all') {
+      return null;
+    }
+    return (
+      stats.monthlySupplierGroups.find((m) => m.monthKey === supplierMonthKey) ||
+      stats.monthlySupplierGroups[0]
+    );
+  }, [supplierMonthKey, stats.monthlySupplierGroups]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -701,15 +856,31 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                       )}
                     </td>
                     <td className="py-3 px-3 text-center bg-rose-50/40">
-                      <span
-                        className={`inline-block font-mono font-black px-2.5 py-1 rounded-lg text-xs ${
-                          w.totalAnomalies > 0
-                            ? 'bg-rose-600 text-white shadow-2xs'
-                            : 'bg-emerald-100 text-emerald-800'
-                        }`}
-                      >
-                        {w.totalAnomalies} anomalie{w.totalAnomalies > 1 ? 's' : ''}
-                      </span>
+                      {w.totalAnomalies > 0 ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onNavigateToHistory) {
+                              onNavigateToHistory({
+                                statusFilter: 'NON CONFORME',
+                                week: w.weekCode,
+                              });
+                            } else if (onNavigateToNonCompliant) {
+                              onNavigateToNonCompliant(w.weekCode);
+                            }
+                          }}
+                          className="inline-flex items-center justify-center gap-1.5 font-mono font-black px-3 py-1.5 rounded-lg text-xs bg-rose-600 hover:bg-rose-700 active:scale-95 text-white shadow-xs cursor-pointer transition-all hover:shadow-md ring-2 ring-rose-400/50 group/btn"
+                          title={`Cliquer pour voir directement les ${w.totalAnomalies} anomalies de la semaine ${w.weekCode}`}
+                        >
+                          <span>{w.totalAnomalies} anomalie{w.totalAnomalies > 1 ? 's' : ''}</span>
+                          <ArrowRight className="w-3.5 h-3.5 text-rose-200 group-hover/btn:translate-x-0.5 transition-transform" />
+                        </button>
+                      ) : (
+                        <span className="inline-block font-mono font-bold px-2 py-0.5 rounded-lg text-xs bg-emerald-100 text-emerald-800">
+                          0 anomalie
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-3 text-center">
                       <div className="flex items-center justify-center gap-2">
@@ -740,17 +911,39 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                     <td className="py-3 px-3">
                       <div className="flex flex-wrap gap-1 max-w-xs">
                         {w.suppliers.map((s, i) => (
-                          <span
+                          <button
                             key={i}
-                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (s.globalStatus !== 'CONFORME') {
+                                if (onNavigateToHistory) {
+                                  onNavigateToHistory({
+                                    statusFilter: 'NON CONFORME',
+                                    week: w.weekCode,
+                                    supplier: s.supplierName,
+                                  });
+                                } else if (onNavigateToNonCompliant) {
+                                  onNavigateToNonCompliant(w.weekCode);
+                                }
+                              }
+                            }}
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded transition-transform ${
                               s.globalStatus === 'CONFORME'
-                                ? 'bg-emerald-100 text-emerald-900'
-                                : 'bg-rose-100 text-rose-900 font-bold'
+                                ? 'bg-emerald-100 text-emerald-900 cursor-default'
+                                : 'bg-rose-100 text-rose-900 font-bold hover:bg-rose-200 active:scale-95 cursor-pointer shadow-2xs'
                             }`}
-                            title={`${s.supplierName} - ${s.globalStatus} (${s.anomalies} anomalies)`}
+                            title={
+                              s.globalStatus === 'CONFORME'
+                                ? `${s.supplierName} - Conforme`
+                                : `${s.supplierName} - ${s.anomalies} anomalies (Cliquer pour afficher)`
+                            }
                           >
-                            {s.supplierName}
-                          </span>
+                            <span>{s.supplierName}</span>
+                            {s.anomalies > 0 && (
+                              <span className="ml-1 text-[9px] text-rose-700 font-bold">({s.anomalies})</span>
+                            )}
+                          </button>
                         ))}
                       </div>
                     </td>
@@ -785,7 +978,25 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   {stats.nonCompliantCount}
                 </td>
                 <td className="py-3 px-3 text-center bg-rose-100/70 text-rose-900 font-black text-sm">
-                  {stats.totalAnomalies} anomalies
+                  {stats.totalAnomalies > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onNavigateToHistory) {
+                          onNavigateToHistory({ statusFilter: 'NON CONFORME' });
+                        } else if (onNavigateToNonCompliant) {
+                          onNavigateToNonCompliant();
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black bg-rose-600 hover:bg-rose-700 active:scale-95 text-white cursor-pointer shadow-xs transition-all ring-2 ring-rose-400/40"
+                      title="Cliquer pour voir toutes les anomalies enregistrées"
+                    >
+                      <span>{stats.totalAnomalies} anomalies</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-rose-200" />
+                    </button>
+                  ) : (
+                    <span>0 anomalie</span>
+                  )}
                 </td>
                 <td className="py-3 px-3 text-center text-emerald-700 font-black text-sm">
                   {stats.globalComplianceRate}% moy.
@@ -820,8 +1031,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
           <div className="space-y-2 pt-2">
             {stats.criteriaStats.slice(0, 7).map((crit) => {
-              const pct = stats.total > 0 ? Math.round((crit.count / stats.total) * 100) : 0;
               const hasIssues = crit.count > 0;
+              const barRatio = stats.total > 0 ? Math.round((crit.count / stats.total) * 100) : 0;
 
               return (
                 <div
@@ -843,7 +1054,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   }
                 >
                   <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className="font-semibold text-slate-800 flex items-center gap-2 truncate max-w-[75%]">
+                    <span className="font-semibold text-slate-800 flex items-center gap-2 truncate max-w-[65%] sm:max-w-[70%]">
                       <span
                         className={`font-mono font-black px-1.5 py-0.5 rounded text-[11px] ${
                           hasIssues
@@ -859,13 +1070,16 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span
-                        className={`font-bold font-mono px-2 py-0.5 rounded text-[11px] ${
+                        className={`font-bold font-mono px-2 py-0.5 rounded text-[11px] inline-flex items-center gap-1 ${
                           hasIssues
                             ? 'bg-rose-100 text-rose-800 group-hover:bg-rose-200 transition-colors'
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
-                        {crit.count} anomalie{crit.count > 1 ? 's' : ''} ({pct}%)
+                        <span className="font-black">{crit.count}/{stats.total}</span>
+                        <span className="text-[10px] font-medium opacity-85">
+                          ({crit.count} fois sur {stats.total})
+                        </span>
                       </span>
                       {hasIssues && (
                         <ChevronRight className="w-3.5 h-3.5 text-rose-400 group-hover:text-rose-700 group-hover:translate-x-0.5 transition-all" />
@@ -877,7 +1091,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                       className={`h-full rounded-full transition-all ${
                         hasIssues ? 'bg-rose-500' : 'bg-emerald-500'
                       }`}
-                      style={{ width: `${Math.max(pct, hasIssues ? 6 : 2)}%` }}
+                      style={{ width: `${Math.max(barRatio, hasIssues ? 8 : 2)}%` }}
                     />
                   </div>
                 </div>
@@ -886,54 +1100,325 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
         </div>
 
-        {/* Classement Qualité Fournisseurs */}
+        {/* Classement & Bilan Mensuel des Fournisseurs */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-3">
             <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Suivi Qualité par Fournisseur
-              </h3>
-              <p className="text-xs text-slate-500">
-                Taux de conformité et alertes d'anomalies par livreur
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-blue-600" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Suivi Qualité par Fournisseur (Données par Mois)
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Bilan mensuel et respect de la cadence hebdomadaire (1 contrôle / semaine / livreur)
               </p>
             </div>
-            <Truck className="w-5 h-5 text-slate-400" />
+
+            {/* Sélecteur de mois & Mode de vue */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <select
+                  value={supplierMonthKey}
+                  onChange={(e) => setSupplierMonthKey(e.target.value)}
+                  className="pl-8 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none"
+                  aria-label="Sélectionner le mois"
+                >
+                  <option value="auto">
+                    📅 {stats.monthlySupplierGroups[0]?.monthLabel || 'Mois en cours'} (Mois récent)
+                  </option>
+                  {stats.monthlySupplierGroups.map((g) => (
+                    <option key={g.monthKey} value={g.monthKey}>
+                      📅 {g.monthLabel} ({g.totalInspections} contrôle{g.totalInspections > 1 ? 's' : ''})
+                    </option>
+                  ))}
+                  <option value="all">🌐 Tous les mois (Bilan global)</option>
+                </select>
+                <Calendar className="w-3.5 h-3.5 text-blue-600 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" />
+              </div>
+
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setSupplierViewMode('cards')}
+                  title="Affichage en cartes"
+                  className={`p-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    supplierViewMode === 'cards'
+                      ? 'bg-white text-blue-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSupplierViewMode('table')}
+                  title="Affichage en tableau"
+                  className={`p-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    supplierViewMode === 'table'
+                      ? 'bg-white text-blue-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Table className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-3 pt-2">
-            {stats.supplierStats.map((sup) => {
-              const compRate =
-                sup.totalInspections > 0
-                  ? Math.round((sup.compliant / sup.totalInspections) * 100)
-                  : 100;
-              const isPerfect = compRate === 100;
+          {/* Synthèse du mois sélectionné */}
+          {activeMonth ? (
+            <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-blue-900">Bilan {activeMonth.monthLabel} :</span>
+                <span className="text-slate-600">
+                  {activeMonth.totalInspections} contrôle(s) •{' '}
+                  <span className="font-semibold text-emerald-700">{activeMonth.compliantCount} conforme(s)</span> •{' '}
+                  <span className="font-semibold text-rose-700">{activeMonth.totalAnomalies} anomalie(s)</span>
+                </span>
+              </div>
+              <span
+                className={`font-black px-2 py-0.5 rounded-full text-[11px] ${
+                  activeMonth.complianceRate === 100
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                Taux mensuel : {activeMonth.complianceRate}%
+              </span>
+            </div>
+          ) : isAllMonths ? (
+            <div className="p-3 bg-slate-100 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-bold text-slate-800">Cumul global sur tous les mois</span>
+              <span className="text-slate-600 font-medium">
+                {stats.total} contrôles • {stats.totalAnomalies} anomalies au total
+              </span>
+            </div>
+          ) : null}
 
-              return (
-                <div
-                  key={sup.name}
-                  className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3 text-xs"
-                >
-                  <div>
-                    <div className="font-bold text-slate-900 text-sm">{sup.name}</div>
-                    <div className="text-slate-500 mt-0.5">
-                      {sup.totalInspections} contrôle(s) • {sup.compliant} conformes • {sup.nonCompliant} défaillance(s)
+          {/* Affichage des Fournisseurs du mois */}
+          {(!activeMonth && !isAllMonths) || (activeMonth && activeMonth.suppliers.length === 0) ? (
+            <div className="py-8 text-center text-slate-400 text-xs">
+              Aucun contrôle enregistré pour ce mois.
+            </div>
+          ) : supplierViewMode === 'cards' ? (
+            <div className="space-y-3 pt-1">
+              {(isAllMonths
+                ? stats.supplierStats.map((s) => ({
+                    name: s.name,
+                    totalInspections: s.totalInspections,
+                    compliant: s.compliant,
+                    nonCompliant: s.nonCompliant,
+                    totalAnomalies: 0,
+                    complianceRate:
+                      s.totalInspections > 0
+                        ? Math.round((s.compliant / s.totalInspections) * 100)
+                        : 100,
+                    inspectionsList: [] as {
+                      reference: string;
+                      date: string;
+                      week: string;
+                      globalStatus: 'CONFORME' | 'NON CONFORME' | 'EN COURS';
+                      anomalies: number;
+                    }[],
+                  }))
+                : activeMonth?.suppliers || []
+              ).map((sup) => {
+                const isPerfect = sup.complianceRate === 100;
+
+                return (
+                  <div
+                    key={sup.name}
+                    className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all shadow-2xs space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
+                          <Truck className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm">{sup.name}</div>
+                          <div className="text-xs text-slate-500">
+                            {sup.totalInspections} contrôle(s) en {activeMonth ? activeMonth.monthLabel : 'cumul'} •{' '}
+                            <span className="text-emerald-700 font-semibold">{sup.compliant} conforme(s)</span>
+                            {sup.nonCompliant > 0 && (
+                              <span className="text-rose-700 font-semibold"> • {sup.nonCompliant} défaillance(s)</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span
+                          className={`inline-block px-2.5 py-1 rounded-full text-xs font-black ${
+                            isPerfect
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : 'bg-rose-100 text-rose-800 border border-rose-300'
+                          }`}
+                        >
+                          {sup.complianceRate}% conforme
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="text-right shrink-0">
-                    <span
-                      className={`inline-block px-2.5 py-1 rounded-full text-xs font-black ${
-                        isPerfect
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                          : 'bg-rose-100 text-rose-800 border border-rose-300'
-                      }`}
-                    >
-                      {compRate}% conforme
-                    </span>
+                    {/* Fiches / Semaines contrôlées pour ce fournisseur dans le mois */}
+                    {sup.inspectionsList && sup.inspectionsList.length > 0 && (
+                      <div className="pt-1 flex flex-wrap items-center gap-1.5 border-t border-slate-100">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">
+                          Passages du mois :
+                        </span>
+                        {sup.inspectionsList.map((insp, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => {
+                              if (insp.anomalies > 0) {
+                                if (onNavigateToHistory) {
+                                  onNavigateToHistory({
+                                    statusFilter: 'NON CONFORME',
+                                    week: insp.week,
+                                    supplier: sup.name,
+                                  });
+                                } else if (onNavigateToNonCompliant) {
+                                  onNavigateToNonCompliant(insp.week);
+                                }
+                              }
+                            }}
+                            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border transition-all ${
+                              insp.globalStatus === 'CONFORME'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 cursor-default'
+                                : 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100 cursor-pointer active:scale-95'
+                            }`}
+                            title={`Contrôle du ${insp.date} (${insp.reference}) - ${insp.globalStatus} (${insp.anomalies} anomalies)${
+                              insp.anomalies > 0 ? ' - Cliquer pour afficher les anomalies' : ''
+                            }`}
+                          >
+                            {insp.globalStatus === 'CONFORME' ? (
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            ) : (
+                              <XCircle className="w-3 h-3 text-rose-600" />
+                            )}
+                            <span className="font-mono">{insp.week}</span>
+                            {insp.anomalies > 0 ? (
+                              <span className="text-[10px] text-rose-700 font-bold">
+                                ({insp.anomalies} non-conf.)
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-emerald-700">100%</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          ) : (
+            /* Mode Tableau Mensuel */
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-3">Fournisseur</th>
+                    <th className="py-2.5 px-3 text-center">Contrôles du mois</th>
+                    <th className="py-2.5 px-3 text-center">Conformes</th>
+                    <th className="py-2.5 px-3 text-center">Défaillants</th>
+                    <th className="py-2.5 px-3 text-center">Anomalies</th>
+                    <th className="py-2.5 px-3 text-center">Taux Mensuel</th>
+                    <th className="py-2.5 px-3 text-center">Statut Qualité</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {(isAllMonths
+                    ? stats.supplierStats.map((s) => ({
+                        name: s.name,
+                        totalInspections: s.totalInspections,
+                        compliant: s.compliant,
+                        nonCompliant: s.nonCompliant,
+                        totalAnomalies: 0,
+                        complianceRate:
+                          s.totalInspections > 0
+                            ? Math.round((s.compliant / s.totalInspections) * 100)
+                            : 100,
+                      }))
+                    : activeMonth?.suppliers || []
+                  ).map((sup) => {
+                    const isPerfect = sup.complianceRate === 100;
+
+                    return (
+                      <tr key={sup.name} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-2.5 px-3 font-bold text-slate-900">{sup.name}</td>
+                        <td className="py-2.5 px-3 text-center font-semibold text-slate-800">
+                          {sup.totalInspections}
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-emerald-700 font-bold">
+                          {sup.compliant}
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-rose-700 font-bold">
+                          {sup.nonCompliant}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          {sup.totalAnomalies > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onNavigateToHistory) {
+                                  onNavigateToHistory({
+                                    statusFilter: 'NON CONFORME',
+                                    supplier: sup.name,
+                                  });
+                                } else if (onNavigateToNonCompliant) {
+                                  onNavigateToNonCompliant();
+                                }
+                              }}
+                              className="font-mono font-bold px-2 py-0.5 rounded text-[11px] bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-95 shadow-2xs inline-flex items-center gap-1 transition-all"
+                              title={`Cliquer pour voir les anomalies de ${sup.name}`}
+                            >
+                              <span>{sup.totalAnomalies}</span>
+                              <ArrowRight className="w-3 h-3 text-rose-200" />
+                            </button>
+                          ) : (
+                            <span className="font-mono font-bold px-2 py-0.5 rounded text-[11px] bg-emerald-100 text-emerald-800">
+                              0
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span
+                            className={`font-black font-mono text-xs ${
+                              isPerfect ? 'text-emerald-700' : 'text-rose-600'
+                            }`}
+                          >
+                            {sup.complianceRate}%
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          {isPerfect ? (
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              Objectif 100%
+                            </span>
+                          ) : (
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
+                              À surveiller
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Règle de cadence hebdomadaire HACCP */}
+          <div className="pt-2 flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+            <Info className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <span>
+              Cadence cible : 1 contrôle par semaine par fournisseur (soit 4 à 5 contrôles par mois et par partenaire).
+            </span>
           </div>
         </div>
       </div>
