@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Inspections de contrôle d'hygiène des véhicules et bidons
+    match /inspections/{inspectionId} {
+      allow read, write: if true;
+    }
+
+    // Répertoire des fournisseurs laitiers
+    match /suppliers/{supplierId} {
+      allow read, write: if true;
+    }
+
+    // Critères personnalisés de contrôle
+    match /criteria/{criterionId} {
+      allow read, write: if true;
+    }
+
+    // Règle par défaut
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

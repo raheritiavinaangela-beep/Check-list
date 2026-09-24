@@ -1,10 +1,11 @@
 import React from 'react';
-import { ClipboardCheck, History, BarChart3, ShieldCheck, Truck, Lock } from 'lucide-react';
+import { ClipboardCheck, History, BarChart3, ShieldCheck, Truck, Lock, Cloud } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'new' | 'history' | 'analytics';
   setActiveTab: (tab: 'new' | 'history' | 'analytics') => void;
   totalInspectionsCount: number;
+  isFirebaseConnected?: boolean;
   onLock?: () => void;
 }
 
@@ -12,6 +13,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
   totalInspectionsCount,
+  isFirebaseConnected = true,
   onLock,
 }) => {
   return (
@@ -32,6 +34,16 @@ export const Header: React.FC<HeaderProps> = ({
                   <ShieldCheck className="w-3 h-3" />
                   SERVICE SQH
                 </span>
+                {isFirebaseConnected && (
+                  <span
+                    className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800"
+                    title="Connecté à la base de données Firebase Firestore Cloud en temps réel"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <Cloud className="w-3 h-3 text-emerald-400" />
+                    <span>Firebase Cloud</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs text-blue-200/80">
                 Contrôle hygiène véhicule de livraison lait

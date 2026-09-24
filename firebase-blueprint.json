@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "inspections": {
+      "title": "Inspections de Contrôle Véhicules & Lait",
+      "description": "Fiches d'inspection d'hygiène des véhicules et bidons de transport de lait",
+      "fields": {
+        "reference": { "type": "string", "description": "Numéro de référence de l'inspection" },
+        "date": { "type": "string", "description": "Date de l'inspection (YYYY-MM-DD)" },
+        "time": { "type": "string", "description": "Heure de réception" },
+        "supplier": { "type": "string", "description": "Nom du fournisseur laitier" },
+        "week": { "type": "string", "description": "Code semaine ISO (ex: S38)" },
+        "driverName": { "type": "string", "description": "Nom du chauffeur" },
+        "inspectorName": { "type": "string", "description": "Nom du contrôleur qualité" },
+        "criteriaResults": { "type": "array", "description": "Résultats d'évaluation par critère" },
+        "globalStatus": { "type": "string", "description": "CONFORME ou NON CONFORME" },
+        "complianceRate": { "type": "number", "description": "Taux de conformité en %" },
+        "totalEvaluated": { "type": "number", "description": "Nombre de critères évalués" },
+        "totalCompliant": { "type": "number", "description": "Nombre de critères conformes" },
+        "totalNonCompliant": { "type": "number", "description": "Nombre de critères défaillants" },
+        "totalNA": { "type": "number", "description": "Nombre de critères Non Applicables" },
+        "otherObservations": { "type": "string", "description": "Remarques complémentaires" },
+        "createdAt": { "type": "string", "description": "Date de création ISO" },
+        "updatedAt": { "type": "string", "description": "Date de mise à jour ISO" }
+      }
+    },
+    "suppliers": {
+      "title": "Fournisseurs",
+      "description": "Liste des partenaires fournisseurs de lait",
+      "fields": {
+        "name": { "type": "string", "description": "Nom du fournisseur" }
+      }
+    },
+    "criteria": {
+      "title": "Critères d'Hygiène",
+      "description": "Critères personnalisés d'évaluation hygiène",
+      "fields": {
+        "code": { "type": "string", "description": "Code critère" },
+        "label": { "type": "string", "description": "Libellé" },
+        "sectionId": { "type": "string", "description": "Section véhicule ou personnel" }
+      }
+    }
+  }
+}

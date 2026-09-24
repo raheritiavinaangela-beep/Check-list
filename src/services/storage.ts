@@ -1,5 +1,12 @@
 import { Inspection, SupplierOption, CriterionDefinition } from '../types';
 import { OFFICIAL_CRITERIA, DEFAULT_SUPPLIERS } from '../data/initialCriteria';
+import {
+  saveInspectionToFirestore,
+  deleteInspectionFromFirestore,
+  saveSupplierToFirestore,
+  saveCriterionToFirestore,
+  deleteCriterionFromFirestore,
+} from './firebase';
 
 const STORAGE_KEY_INSPECTIONS = 'lait_hygiene_inspections_v3';
 const STORAGE_KEY_SUPPLIERS = 'lait_hygiene_suppliers_v3';
@@ -56,6 +63,11 @@ export function saveCustomCriterion(newCrit: {
 
   const updated = [...current, criterion];
   localStorage.setItem(STORAGE_KEY_CRITERIA, JSON.stringify(updated));
+
+  saveCriterionToFirestore(criterion).catch((err) => {
+    console.warn('Erreur synchro critère Firestore:', err);
+  });
+
   return criterion;
 }
 
@@ -64,6 +76,10 @@ export function deleteCustomCriterion(criterionId: string): void {
   // On ne supprime que si ce n'est pas un critère de base officiel
   const updated = current.filter((c) => c.id !== criterionId);
   localStorage.setItem(STORAGE_KEY_CRITERIA, JSON.stringify(updated));
+
+  deleteCriterionFromFirestore(criterionId).catch((err) => {
+    console.warn('Erreur suppression critère Firestore:', err);
+  });
 }
 
 export function getNextCriterionCode(
@@ -136,6 +152,11 @@ export function saveSupplier(supplierName: string): SupplierOption {
   };
   const updated = [newSupplier, ...list];
   localStorage.setItem(STORAGE_KEY_SUPPLIERS, JSON.stringify(updated));
+
+  saveSupplierToFirestore(newSupplier).catch((err) => {
+    console.warn('Erreur synchro fournisseur Firestore:', err);
+  });
+
   return newSupplier;
 }
 
@@ -173,12 +194,22 @@ export function saveInspection(inspection: Inspection): void {
     updated = [inspection, ...current];
   }
   localStorage.setItem(STORAGE_KEY_INSPECTIONS, JSON.stringify(updated));
+
+  // Sauvegarde instantanée dans Firebase Firestore
+  saveInspectionToFirestore(inspection).catch((err) => {
+    console.warn('Erreur synchro Firestore inspection:', err);
+  });
 }
 
 export function deleteInspection(id: string): void {
   const current = getStoredInspections();
   const filtered = current.filter((i) => i.id !== id);
   localStorage.setItem(STORAGE_KEY_INSPECTIONS, JSON.stringify(filtered));
+
+  // Suppression instantanée dans Firebase Firestore
+  deleteInspectionFromFirestore(id).catch((err) => {
+    console.warn('Erreur suppression Firestore inspection:', err);
+  });
 }
 
 export function getInspectionById(id: string): Inspection | undefined {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Inspection } from './types';
 import { getStoredInspections } from './services/storage';
+import { subscribeToInspections, seedFirestoreIfEmpty } from './services/firebase';
 import { Header } from './components/Header';
 import { NewInspectionForm } from './components/NewInspectionForm';
 import { HistoryView } from './components/HistoryView';
@@ -17,6 +18,7 @@ export default function App() {
   });
   const [activeTab, setActiveTab] = useState<'new' | 'history' | 'analytics'>('new');
   const [inspections, setInspections] = useState<Inspection[]>([]);
+  const [isFirebaseConnected, setIsFirebaseConnected] = useState<boolean>(true);
   const [historyFilter, setHistoryFilter] = useState<{
     statusFilter?: 'ALL' | 'CONFORME' | 'NON CONFORME';
     criterionCode?: string | null;
@@ -32,9 +34,38 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
-      reloadInspections();
-    }
+    if (!isAuthenticated) return;
+
+    // 1. Chargement instantané du cache local
+    const local = getStoredInspections();
+    setInspections(local);
+
+    // 2. Initialisation de Firestore si la collection est encore vide
+    seedFirestoreIfEmpty(local).catch((err) => {
+      console.warn('Initialisation Firestore:', err);
+    });
+
+    // 3. Écoute temps réel depuis Firebase Firestore
+    const unsubscribe = subscribeToInspections(
+      (remoteList) => {
+        setIsFirebaseConnected(true);
+        if (remoteList && remoteList.length > 0) {
+          setInspections(remoteList);
+          try {
+            localStorage.setItem('lait_hygiene_inspections_v3', JSON.stringify(remoteList));
+          } catch {
+            // ignore
+          }
+        }
+      },
+      () => {
+        setIsFirebaseConnected(false);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
   }, [isAuthenticated]);
 
   const handleUnlock = () => {
@@ -105,6 +136,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         totalInspectionsCount={inspections.length}
+        isFirebaseConnected={isFirebaseConnected}
         onLock={handleLock}
       />
 

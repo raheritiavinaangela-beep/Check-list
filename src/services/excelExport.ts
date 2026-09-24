@@ -172,6 +172,7 @@ export function exportInspectionsToExcel(inspections: Inspection[], filenamePref
         'Critère Contrôlé': item.label,
         'Total Évaluations': item.totalEvaluations,
         'Nombre Non-Conformités': item.nonCompliantCount,
+        'Fréquence (n/x)': `${item.nonCompliantCount}/${item.totalEvaluations} (${item.nonCompliantCount} fois sur ${item.totalEvaluations})`,
         'Taux Anomalie (%)': `${rate}%`,
         'Niveau Risque':
           item.nonCompliantCount === 0
